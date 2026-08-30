@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>排行榜</title>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f7; --card:#fff; --line:#ececee; --line2:#dcdcdf;
+  --text:#26262b; --muted:#8a8a93; --accent:#e8544e;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+button{font-family:inherit}
+.page{max-width:1280px;margin:0 auto;padding:22px 16px 56px;}
+
+.topbar{margin-bottom:16px}
+.topbar h1{font-size:20px}
+.topbar .sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* ---------- 卡片 ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 1px 3px rgba(0,0,0,.05);overflow:hidden;}
+.toolbar{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;
+  padding:12px 14px;border-bottom:1px solid var(--line);}
+.btn{appearance:none;border:1px solid var(--line2);background:#fff;color:var(--text);
+  border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;transition:.15s;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.btn:hover{border-color:#b9b9c2;background:#fafafa}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.danger{color:#d33;border-color:#eecaca;margin-right:auto}
+.btn.danger:hover{background:#fdf1f1;border-color:#e5b9b9}
+
+/* ---------- 层级行 ---------- */
+.tiers{padding:16px 16px 8px;display:flex;flex-direction:column;gap:12px}
+.tier-row{display:grid;grid-template-columns:92px 1fr 30px;column-gap:10px;
+  border-bottom:1px solid var(--line);padding-bottom:12px;align-items:start;}
+.tier-row:last-child{border-bottom:none;padding-bottom:4px}
+.tier-label{width:92px;min-height:92px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;text-align:center;
+  font-weight:700;font-size:21px;line-height:1.25;padding:8px;word-break:break-all;
+  color:#fff;letter-spacing:1px;
+  background:linear-gradient(160deg,var(--c1),var(--c2));}
+.tier-items{display:flex;flex-wrap:wrap;gap:10px 8px;align-content:flex-start;
+  min-height:92px;padding:2px 4px;border-radius:8px;}
+.tier-items.over{background:#eef4ff;outline:2px dashed #9db9e8;outline-offset:-2px}
+.tier-items:empty::before{content:"拖动图片到此处";color:#c9c9cf;font-size:12px;margin:auto;padding:16px 0}
+
+.tier-ctrl{display:flex;flex-direction:column;gap:4px;justify-content:center;padding-top:2px}
+.cbtn{width:26px;height:24px;font-size:12px;border:1px solid var(--line2);background:#fff;
+  border-radius:6px;cursor:pointer;color:#777;display:flex;align-items:center;justify-content:center;padding:0}
+.cbtn:hover{background:#f2f2f4}
+.cbtn.dis{opacity:.35;cursor:default}
+.cbtn.dis:hover{background:#fff}
+
+/* ---------- 图片块 ---------- */
+.item{position:relative;width:86px;border-radius:10px;cursor:grab;user-select:none}
+.item:active{cursor:grabbing}
+.item img{width:86px;height:86px;object-fit:cover;border-radius:10px;display:block;
+  border:1px solid rgba(0,0,0,.08);background:#f2f2f4;pointer-events:none}
+.item .cap{font-size:11px;color:var(--muted);text-align:center;margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:86px}
+.item .del{position:absolute;top:3px;right:3px;width:18px;height:18px;border:none;border-radius:50%;
+  background:rgba(0,0,0,.55);color:#fff;font-size:12px;line-height:18px;cursor:pointer;display:none;padding:0}
+.item:hover .del{display:block}
+.item.dragging{opacity:.35}
+.placeholder{width:86px;height:86px;border-radius:10px;border:2px dashed #b9c2d0;background:#eef2f7;flex-shrink:0}
+
+/* ---------- 上下布局 ---------- */
+.layout-tb .tier-row{display:block;position:relative}
+.layout-tb .tier-label{width:100%;min-height:44px;border-radius:8px}
+.layout-tb .tier-ctrl{position:absolute;top:10px;right:10px;flex-direction:row}
+.layout-tb .tier-items{margin-top:8px}
+
+/* ---------- 隐藏名称 ---------- */
+.hide-names .tier-label{display:none}
+.layout-lr.hide-names .tier-row{grid-template-columns:1fr 30px}
+
+/* ---------- 风格变体 ---------- */
+.style-1 .tier-label,.style-1 .item,.style-1 .item img,.style-1 .placeholder{border-radius:0}
+.style-2 .tier-label{background:#fff;color:var(--c2);border:2px solid var(--c1)}
+.style-2 .item img{border-radius:6px}
+.style-2 .placeholder{border-radius:6px}
+
+/* ---------- 未分配 / 上传 ---------- */
+.unassigned{border-top:1px solid var(--line);padding:14px 16px 16px}
+.un-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.un-head .t{font-size:14px;color:var(--muted)}
+#unassignedRow{display:flex;flex-wrap:wrap;gap:10px 8px;min-height:60px;padding:2px 4px;border-radius:8px}
+#unassignedRow.over{background:#eef4ff;outline:2px dashed #9db9e8;outline-offset:-2px}
+#unassignedRow:empty::before{content:"暂无图片";color:#c9c9cf;font-size:12px;margin:auto;padding:12px 0}
+
+.upload-zone{margin-top:14px;border:1px solid var(--line2);border-radius:12px;
+  padding:26px 16px;text-align:center;cursor:pointer;transition:.15s;background:#fff}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:#fff7f6}
+.uz-title{font-weight:600;margin-top:8px;font-size:14px}
+.uz-sub{font-size:12px;color:var(--muted);margin-top:4px}
+
+.tips{font-size:12px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.9}
+
+/* ---------- 弹窗 ---------- */
+.mask{position:fixed;inset:0;background:rgba(20,20,25,.4);display:flex;
+  align-items:center;justify-content:center;z-index:50}
+.mask.hidden{display:none}
+.modal{background:#fff;border-radius:12px;padding:18px;width:320px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.modal h3{font-size:15px;margin-bottom:14px}
+.modal label{display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:10px;color:#555}
+.modal label .lb{width:36px;flex-shrink:0}
+.modal input[type=text]{flex:1;border:1px solid var(--line2);border-radius:8px;padding:6px 8px;font-size:13px;outline:none}
+.modal input[type=text]:focus{border-color:var(--accent)}
+.modal input[type=color]{width:42px;height:30px;border:1px solid var(--line2);border-radius:6px;
+  padding:2px;background:#fff;cursor:pointer}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(10px);
+  background:rgba(30,30,35,.92);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;
+  opacity:0;pointer-events:none;transition:.25s;z-index:99}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:640px){
+  .tier-row{grid-template-columns:64px 1fr 26px}
+  .tier-label{width:64px;min-height:64px;font-size:16px}
+  .item,.item img,.item .cap,.placeholder{width:64px}
+  .item img,.placeholder{height:64px}
+  .layout-lr.hide-names .tier-row{grid-template-columns:1fr 26px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <h1>排行榜</h1>
+    <div class="sub">上传图片，拖到对应层级完成排名</div>
+  </header>
+
+  <div class="card">
+    <div class="toolbar">
+      <button class="btn" id="btnLayout">⇄ 左右布局</button>
+      <button class="btn" id="btnHideNames">👁 隐藏名称</button>
+      <button class="btn" id="btnStyle">✦ 风格</button>
+      <button class="btn" id="btnAddTier">＋ 添加层级</button>
+      <button class="btn" id="btnReset">↺ 重置</button>
+      <button class="btn primary" id="btnSavePng">⬇ 保存图片</button>
+    </div>
+
+    <div id="exportArea">
+      <div id="tierRows" class="tiers"></div>
+
+      <div class="unassigned">
+        <div class="un-head">
+          <span class="t">未分配</span>
+          <button class="btn" id="btnAddImages">添加图片</button>
+        </div>
+        <div id="unassignedRow" data-drop-id="__u__"></div>
+
+        <div class="upload-zone" id="uploadZone">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#c2c2c8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2.5"/>
+            <circle cx="9" cy="10" r="1.8"/>
+            <path d="M4.5 18.5l5-5 3.5 3.5 3-3 3.5 3.5"/>
+          </svg>
+          <div class="uz-title">拖拽图片到这里上传</div>
+          <div class="uz-sub">也可点击选择本地图片，支持多选、截图后 Ctrl+V 粘贴</div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      </div>
+    </div>
+  </div>
+
+  <p class="tips">拖动图片可放入任意层级并排序 · 双击图片移回「未分配」 · 悬停图片点 × 删除 · 每行右侧可 ↑↓ 调整层级顺序、⚙ 编辑层级</p>
+</div>
+
+<!-- 层级编辑弹窗 -->
+<div class="mask hidden" id="mask">
+  <div class="modal">
+    <h3>编辑层级</h3>
+    <label><span class="lb">名称</span><input type="text" id="editName" maxlength="8"></label>
+    <label><span class="lb">主色</span><input type="color" id="editC1"></label>
+    <label><span class="lb">深色</span><input type="color" id="editC2"></label>
+    <div class="modal-actions">
+      <button class="btn danger" id="editDelete">删除层级</button>
+      <button class="btn" id="editCancel">取消</button>
+      <button class="btn primary" id="editOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let uid = 1; const nid = () => 'i' + (uid++);
+
+const PALETTE = ['#e8544e','#f0932b','#f7c948','#43b858','#6a5fd6','#3e8fd8','#d35fb0','#8a929e'];
+
+function freshState(){
+  return {
+    layout:'lr', hideNames:false, style:0,
+    tiers:[
+      {id:nid(),name:'夯',    c1:'#f0564a',c2:'#cf2b20',items:[]},
+      {id:nid(),name:'顶级',  c1:'#f7a11c',c2:'#e07c07',items:[]},
+      {id:nid(),name:'人上人',c1:'#f8cf11',c2:'#dfa400',items:[]},
+      {id:nid(),name:'NPC',   c1:'#45c15b',c2:'#239b3c',items:[]},
+      {id:nid(),name:'拉完了',c1:'#6a5fd6',c2:'#4c3fbb',items:[]},
+    ],
+    unassigned:[]
+  };
+}
+let state = freshState();
+let dragging = null;      // {id, from}
+let editingTierId = null;
+
+const ph = document.createElement('div'); ph.className = 'placeholder';
+
+/* ---------- 工具 ---------- */
+function shade(hex,pct){
+  const n=parseInt(hex.slice(1),16);let r=n>>16,g=(n>>8)&255,b=n&255;
+  const t=pct<0?0:255,p=Math.abs(pct)/100;
+  r=Math.round((t-r)*p+r);g=Math.round((t-g)*p+g);b=Math.round((t-b)*p+b);
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+let toastTimer;
+function toast(msg){
+  const t=$('#toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+function arrOf(id){
+  if(id==='__u__')return state.unassigned;
+  const t=state.tiers.find(x=>x.id===id);return t?t.items:null;
+}
+
+/* ---------- 渲染 ---------- */
+function renderItem(it){
+  const d=document.createElement('div');
+  d.className='item';d.draggable=true;d.dataset.id=it.id;d.title=it.name;
+  const img=new Image();img.src=it.src;img.draggable=false;
+  const cap=document.createElement('div');cap.className='cap';cap.textContent=it.name;
+  const del=document.createElement('button');del.className='del';del.textContent='×';del.title='删除';del.draggable=false;
+  d.append(img,cap,del);
+  return d;
+}
+function render(){
+  const wrap=$('#tierRows');wrap.innerHTML='';
+  wrap.className='tiers layout-'+state.layout+' style-'+state.style+(state.hideNames?' hide-names':'');
+  state.tiers.forEach((t,i)=>{
+    const row=document.createElement('div');row.className='tier-row';row.dataset.tierId=t.id;
+    const label=document.createElement('div');label.className='tier-label';label.textContent=t.name;
+    label.style.setProperty('--c1',t.c1);label.style.setProperty('--c2',t.c2);
+    const cont=document.createElement('div');cont.className='tier-items';cont.dataset.dropId=t.id;
+    t.items.forEach(it=>cont.appendChild(renderItem(it)));
+    const ctrl=document.createElement('div');ctrl.className='tier-ctrl';
+    const up=document.createElement('button');up.className='cbtn'+(i===0?' dis':'');up.textContent='↑';up.dataset.act='up';up.title='上移';
+    const down=document.createElement('button');down.className='cbtn'+(i===state.tiers.length-1?' dis':'');down.textContent='↓';down.dataset.act='down';down.title='下移';
+    const gear=document.createElement('button');gear.className='cbtn';gear.textContent='⚙';gear.dataset.act='gear';gear.title='编辑层级';
+    ctrl.append(up,down,gear);
+    row.append(label,cont,ctrl);
+    wrap.appendChild(row);
+  });
+  const u=$('#unassignedRow');u.innerHTML='';
+  state.unassigned.forEach(it=>u.appendChild(renderItem(it)));
+  $('#btnLayout').innerHTML = state.layout==='lr' ? '⇄ 左右布局' : '⇅ 上下布局';
+  $('#btnHideNames').innerHTML = state.hideNames ? '👁 显示名称' : '👁 隐藏名称';
+}
+
+/* ---------- 图片移动 ---------- */
+function moveItem(from,to,id,idx){
+  const src=arrOf(from),dst=arrOf(to);
+  if(!src||!dst)return;
+  const si=src.findIndex(it=>it.id===id);
+  if(si<0)return;
+  const [it]=src.splice(si,1);
+  if(from===to&&si<idx)idx--;
+  if(idx==null||idx>dst.length)dst.push(it);else dst.splice(idx,0,it);
+  render();
+}
+
+/* ---------- 拖拽 ---------- */
+function getInsertRef(zone,x,y){
+  const items=[...zone.querySelectorAll('.item:not(.dragging)')];
+  if(!items.length)return null;
+  const rows=[];
+  for(const it of items){
+    const r=it.getBoundingClientRect();
+    let row=rows.find(w=>Math.abs(w.top-r.top)<30);
+    if(!row){row={top:r.top,items:[]};rows.push(row);}
+    row.items.push({it,r});
+  }
+  let best=rows[0],bd=Infinity;
+  for(const w of rows){const d=Math.abs(w.top+43-y);if(d<bd){bd=d;best=w;}}
+  for(const {it,r} of best.items){if(x<r.left+r.width/2)return it;}
+  return null;
+}
+function placePh(zone,x,y){
+  const ref=getInsertRef(zone,x,y);
+  if(ref)zone.insertBefore(ph,ref);else zone.appendChild(ph);
+}
+function phIndex(zone){
+  if(ph.parentNode!==zone)return null;
+  let c=0;
+  for(const ch of zone.children){
+    if(ch===ph)break;
+    if(ch.classList.contains('item')&&!ch.classList.contains('dragging'))c++;
+  }
+  return c;
+}
+function cleanupDrag(){
+  dragging=null;ph.remove();
+  document.querySelectorAll('.dragging').forEach(x=>x.classList.remove('dragging'));
+  document.querySelectorAll('.over').forEach(x=>x.classList.remove('over'));
+}
+
+document.addEventListener('dragstart',e=>{
+  const el=e.target.closest?e.target.closest('.item'):null;
+  if(!el)return;
+  const zone=el.closest('[data-drop-id]');
+  dragging={id:el.dataset.id,from:zone?zone.dataset.dropId:null};
+  el.classList.add('dragging');
+  e.dataTransfer.effectAllowed='move';
+  try{e.dataTransfer.setData('text/plain',el.dataset.id);}catch(_){}
+});
+document.addEventListener('dragover',e=>{
+  const zone=e.target.closest?e.target.closest('[data-drop-id]'):null;
+  if(!dragging||!zone)return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.over').forEach(z=>z.classList.remove('over'));
+  zone.classList.add('over');
+  placePh(zone,e.clientX,e.clientY);
+});
+document.addEventListener('drop',e=>{
+  if(dragging){
+    e.preventDefault();
+    const zone=e.target.closest?e.target.closest('[data-drop-id]'):null;
+    if(zone)moveItem(dragging.from,zone.dataset.dropId,dragging.id,phIndex(zone));
+  }else if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){
+    e.preventDefault();
+    handleFiles(e.dataTransfer.files);
+  }
+  cleanupDrag();
+});
+document.addEventListener('dragend',()=>{cleanupDrag();render();});
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>e.preventDefault());
+
+/* ---------- 图片上传 ---------- */
+function handleFiles(files){
+  const imgs=[...files].filter(f=>f.type&&f.type.startsWith('image/'));
+  if(!imgs.length)return;
+  let loaded=0;
+  imgs.forEach(f=>{
+    const r=new FileReader();
+    r.onload=()=>{
+      state.unassigned.push({id:nid(),name:f.name.replace(/\.[^.]+$/,''),src:r.result});
+      if(++loaded===imgs.length){render();toast('已添加 '+imgs.length+' 张图片');}
+    };
+    r.readAsDataURL(f);
+  });
+}
+$('#uploadZone').addEventListener('click',()=>$('#fileInput').click());
+$('#btnAddImages').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change',e=>{handleFiles(e.target.files);e.target.value='';});
+const uz=$('#uploadZone');
+uz.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();uz.classList.add('drag');});
+uz.addEventListener('dragleave',()=>uz.classList.remove('drag'));
+uz.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();uz.classList.remove('drag');});
+document.addEventListener('paste',e=>{
+  const files=[...((e.clipboardData&&e.clipboardData.items)||[])]
+    .filter(x=>x.kind==='file'&&x.type.startsWith('image/'))
+    .map(x=>x.getAsFile()).filter(Boolean);
+  if(files.length){e.preventDefault();handleFiles(files);}
+});
+
+/* ---------- 图片操作：删除 / 移回未分配 ---------- */
+document.addEventListener('click',e=>{
+  const del=e.target.closest?e.target.closest('.item .del'):null;
+  if(!del)return;
+  const it=del.closest('.item');
+  const zone=it.closest('[data-drop-id]');
+  const arr=arrOf(zone?zone.dataset.dropId:null);
+  if(!arr)return;
+  const i=arr.findIndex(x=>x.id===it.dataset.id);
+  if(i>-1)arr.splice(i,1);
+  render();
+});
+document.addEventListener('dblclick',e=>{
+  const it=e.target.closest?e.target.closest('.item'):null;
+  if(!it)return;
+  const zone=it.closest('[data-drop-id]');
+  if(zone&&zone.dataset.dropId==='__u__')return;
+  moveItem(zone?zone.dataset.dropId:null,'__u__',it.dataset.id,null);
+  toast('已移回未分配');
+});
+
+/* ---------- 工具栏 ---------- */
+$('#btnLayout').addEventListener('click',()=>{
+  state.layout=state.layout==='lr'?'tb':'lr';render();
+});
+$('#btnHideNames').addEventListener('click',()=>{
+  state.hideNames=!state.hideNames;render();
+});
+$('#btnStyle').addEventListener('click',()=>{
+  state.style=(state.style+1)%3;render();
+  toast('风格：'+['渐变','直角','线框'][state.style]);
+});
+$('#btnAddTier').addEventListener('click',()=>{
+  const c=PALETTE[state.tiers.length%PALETTE.length];
+  state.tiers.push({id:nid(),name:'新层级',c1:c,c2:shade(c,-25),items:[]});
+  render();
+  const rows=$('#tierRows');
+  rows.lastElementChild&&rows.lastElementChild.scrollIntoView({behavior:'smooth',block:'center'});
+});
+$('#btnReset').addEventListener('click',()=>{
+  if(!confirm('确定重置？将清空所有图片与层级修改。'))return;
+  state=freshState();render();toast('已重置');
+});
+
+/* ---------- 层级行控制 ---------- */
+$('#tierRows').addEventListener('click',e=>{
+  const b=e.target.closest?e.target.closest('.cbtn'):null;
+  if(!b||b.classList.contains('dis'))return;
+  const row=e.target.closest('.tier-row');
+  const i=state.tiers.findIndex(t=>t.id===row.dataset.tierId);
+  if(i<0)return;
+  const act=b.dataset.act;
+  if(act==='up'&&i>0){[state.tiers[i-1],state.tiers[i]]=[state.tiers[i],state.tiers[i-1]];render();}
+  else if(act==='down'&&i<state.tiers.length-1){[state.tiers[i+1],state.tiers[i]]=[state.tiers[i],state.tiers[i+1]];render();}
+  else if(act==='gear')openEditor(state.tiers[i].id);
+});
+
+/* ---------- 层级编辑弹窗 ---------- */
+function openEditor(id){
+  editingTierId=id;
+  const t=state.tiers.find(x=>x.id===id);
+  if(!t)return;
+  $('#editName').value=t.name;
+  $('#editC1').value=t.c1;
+  $('#editC2').value=t.c2;
+  $('#mask').classList.remove('hidden');
+  $('#editName').focus();
+}
+function closeEditor(){$('#mask').classList.add('hidden');}
+$('#editOk').addEventListener('click',()=>{
+  const t=state.tiers.find(x=>x.id===editingTierId);
+  if(t){
+    t.name=$('#editName').value.trim()||t.name;
+    t.c1=$('#editC1').value;
+    t.c2=$('#editC2').value;
+  }
+  closeEditor();render();
+});
+$('#editCancel').addEventListener('click',closeEditor);
+$('#mask').addEventListener('click',e=>{if(e.target.id==='mask')closeEditor();});
+$('#editDelete').addEventListener('click',()=>{
+  if(!confirm('删除该层级？其中的图片将移到「未分配」。'))return;
+  const i=state.tiers.findIndex(x=>x.id===editingTierId);
+  if(i>-1){
+    state.unassigned.push(...state.tiers[i].items);
+    state.tiers.splice(i,1);
+  }
+  closeEditor();render();
+});
+$('#editName').addEventListener('keydown',e=>{if(e.key==='Enter')$('#editOk').click();});
+
+/* ---------- 导出图片 ---------- */
+$('#btnSavePng').addEventListener('click',async()=>{
+  if(typeof html2canvas!=='function'){toast('导出组件未能加载，请联网后重试');return;}
+  cleanupDrag();
+  toast('正在生成图片…');
+  try{
+    const canvas=await html2canvas($('#exportArea'),{backgroundColor:'#ffffff',scale:2});
+    canvas.toBlob(blob=>{
+      if(!blob){toast('生成失败：画布为空');return;}
+      const a=document.createElement('a');
+      a.download='排行榜.png';
+      a.href=URL.createObjectURL(blob);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+      toast('已保存排行榜.png');
+    },'image/png');
+  }catch(err){
+    toast('生成失败：'+err.message);
+  }
+});
+
+render();
+</script>
+</body>
+</html>
